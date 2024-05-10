@@ -33,7 +33,7 @@ salesMap$zone[(cut3 + 1) : cut4] <- "east"
 salesMap$zone[(cut4 + 1) : cut5] <- "west"
 
 ## combine brands and mapping. Make it so some brands are not available everywhere.
-brand_map <- data.frame()
+brandMap <- data.frame()
 
 set.seed(42)
 brandDraws <- runif(length(brand))
@@ -57,34 +57,34 @@ for (b in 1:length(brand)) {
   
   temp$brand <- brandB
   
-  brand_map <- rbind(brand_map,temp)
+  brandMap <- rbind(brandMap,temp)
 }
 
 # calendar
 year <- 2018:2024
 month <- 1:12
-year_month <- expand.grid(year,month)
+yearMonth <- expand.grid(year,month)
 
-brand_time_map <- data.frame()
+brandTimeMap <- data.frame()
 
-for(i in 1:nrow(year_month)) {
-  y = year_month$Var1[i]
-  m <- year_month$Var2[i]
+for(i in 1:nrow(yearMonth)) {
+  y = yearMonth$Var1[i]
+  m <- yearMonth$Var2[i]
   
-  temp <- brand_map
+  temp <- brandMap
   temp$year <- y
   temp$month <- m
   
-  brand_time_map <- rbind(brand_time_map,temp)
+  brandTimeMap <- rbind(brandTimeMap,temp)
 }
 
 
 
 #customers - year variation. I want repeat customers, but not always there.  
-num_customer <- 123 # 50 customers
-customer_id <- c(1:num_customer) # 50 customer IDs
-yqc_replicated <- replicate(num_customer, year_month, simplify = FALSE)
-yqc <- do.call(rbind, Map(cbind, yqc_replicated, customer_id = customer_id))
+numCustomer <- 123 # 50 customers
+customerID <- c(1:numCustomer) # 50 customer IDs
+yqcReplicated <- replicate(numCustomer, yearMonth, simplify = FALSE)
+yqc <- do.call(rbind, Map(cbind, yqcReplicated, customerID = customerID))
 
 yqc <- yqc %>% rename(year = Var1, 
                       month = Var2)
@@ -92,7 +92,7 @@ yqc <- yqc %>% rename(year = Var1,
 yqc <- yqc %>% sample_frac(0.4, replace = FALSE)
 
 # assign brands to different customers and different times
-brands <- unique(brand_time_map$brand)
+brands <- unique(brandTimeMap$brand)
 # I realize this is really hand coded. Sorry. But I am lazy. 
 probabilities <- c(0.03, 0.09, 0.15, 0.18, 0.27, 0.1, 0.1, 0.05, 0.03)
 
@@ -102,8 +102,8 @@ yqc$brand <- sample(brands, size = nrow(yqc), replace = TRUE, prob = probabiliti
 # add customers to other data
 # don't really care if duplicates are created. I will allow customers to make multiple purchases of one or multiple products. 
 # this is fake data. I'll do what I want!
-brand_time_map_cust <- 
-  left_join(brand_time_map,yqc, 
+brandTimeMapCust <- 
+  left_join(brandTimeMap,yqc, 
             by = c("month","year","brand"), multiple = "all")
 
 
@@ -111,31 +111,31 @@ brand_time_map_cust <-
 # first get base price per brand. Then I will mess with it. 
 brand
 
-brand_num <- round(rnorm(length(brand),400,170),0)
+brandNum <- round(rnorm(length(brand),400,170),0)
 
-brand_base_prices <- data.frame(brand = brand, price0 = brand_num)
+brandBasePrices <- data.frame(brand = brand, price0 = brandNum)
 
-brand_map_prices <- full_join(brand_base_prices,brand_map, by = "brand", multiple = "all")
+brandMapPrices <- full_join(brandBasePrices,brandMap, by = "brand", multiple = "all")
 
 # now get some variation by geography
-zone_ratios <- data.frame(
-  zone = unique(brand_map$zone),
-  zone_effect = runif(length(unique(brand_map$zone)), min = 0.8, max = 1.2))
+zoneRatios <- data.frame(
+  zone = unique(brandMap$zone),
+  zoneEffect = runif(length(unique(brandMap$zone)), min = 0.8, max = 1.2))
 
-region_ratios <- data.frame(
+regionRatios <- data.frame(
   region = region,
-  region_effect = rnorm(length(region),1,.1))
+  regionEffect = rnorm(length(region),1,.1))
 
-brand_map_prices <- left_join(brand_map_prices, zone_ratios, by = "zone")
-brand_map_prices <- left_join(brand_map_prices, region_ratios, by = "region")
+brandMapPrices <- left_join(brandMapPrices, zoneRatios, by = "zone")
+brandMapPrices <- left_join(brandMapPrices, regionRatios, by = "region")
 
-brand_map_prices <- brand_map_prices %>%
-  mutate(price = price0*zone_effect*region_effect) %>%
+brandMapPrices <- brandMapPrices %>%
+  mutate(price = price0*zoneEffect*regionEffect) %>%
   select(brand,zone,region,price) %>%
   arrange(brand,zone,region)
 
 # now some time trends
-time <- year_month %>%
+time <- yearMonth %>%
   rename(year = Var1,
          month = Var2) %>%
   arrange(year,month)
@@ -153,156 +153,160 @@ time <- time %>%
            0.0008*time4) %>%
   select(year,month,trend)
 
-brand_time_map <- left_join(brand_time_map,
+brandTimeMap <- left_join(brandTimeMap,
                             time, 
                             by = c("year","month"))
 
-brand_time_map_prices <- full_join(brand_map_prices,
-                                   brand_time_map, 
+brandTimeMapPrices <- full_join(brandMapPrices,
+                                   brandTimeMap, 
                                    by = c("brand","zone","region"), multiple = "all")
 
-brand_time_map_prices$trend <- brand_time_map_prices$trend * runif(nrow(brand_time_map_prices),min = 0.9,max = 1.1)
+brandTimeMapPrices$trend <- brandTimeMapPrices$trend * runif(nrow(brandTimeMapPrices),min = 0.9,max = 1.1)
 
-brand_time_map_prices$price <- brand_time_map_prices$price + brand_time_map_prices$trend
+brandTimeMapPrices$price <- brandTimeMapPrices$price + brandTimeMapPrices$trend
 
-brand_time_map_prices$trend = NULL
+brandTimeMapPrices$trend = NULL
 
-brand_time_map_prices <- brand_time_map_prices %>%
+brandTimeMapPrices <- brandTimeMapPrices %>%
   group_by(brand, year, month, zone) %>%
-  mutate(list_price = 1.06*max(price)) %>%
-  rename(sales_price = price) %>%
+  mutate(listPrice = 1.06*max(price)) %>%
+  rename(salesPrice = price) %>%
   ungroup()
 
 #volume
 # start with a base volume for each customer-brand
 
-cb <- unique(brand_time_map_cust[,c("brand","customer_id")])
-cb$base_volume <- round(runif(nrow(cb),-500,1000))
-cb$base_volume[cb$base_volume < 0] <- 0
+cb <- unique(brandTimeMapCust[,c("brand","customerID")])
+cb$baseVolume <- round(runif(nrow(cb),-500,1000))
+cb$baseVolume[cb$baseVolume < 0] <- 0
 
 # add map variation
-cb_map <- full_join(cb, brand_map, by = "brand", multiple = "all")
-cb_map$shifter <- runif(nrow(cb_map),.7,2.3)
-cb_map$base_volume <- cb_map$base_volume*cb_map$shifter
-cb_map$shifter <- NULL
+cbMap <- full_join(cb, brandMap, by = "brand", multiple = "all")
+cbMap$shifter <- runif(nrow(cbMap),.7,2.3)
+cbMap$baseVolume <- cbMap$baseVolume*cbMap$shifter
+cbMap$shifter <- NULL
 
-cb_map$d_shift1 <- runif(nrow(cb_map),.8,3)
-cb_map$d_shift2 <- rnorm(nrow(cb_map),.02,.006)
-cb_map$d_shift3 <- rnorm(nrow(cb_map),.00006,.000001)
-cb_map$d_shift4 <- rnorm(nrow(cb_map),.0,.00000003)
+cbMap$dShift1 <- runif(nrow(cbMap),.8,3)
+cbMap$dShift2 <- rnorm(nrow(cbMap),.02,.006)
+cbMap$dShift3 <- rnorm(nrow(cbMap),.00006,.000001)
+cbMap$dShift4 <- rnorm(nrow(cbMap),.0,.00000003)
 
 
 # now that we have bases, add price impacts. price impacts are already varying by time, so no time effect needed
 # bring together customers and prices
 
-my_data <- full_join(brand_time_map_cust,
-                     brand_time_map_prices,
-                     by = intersect(names(brand_time_map_cust),names(brand_time_map_prices)))
+myData <- full_join(brandTimeMapCust,
+                     brandTimeMapPrices,
+                     by = intersect(names(brandTimeMapCust),names(brandTimeMapPrices)))
 
 # bring in base volumes.
 
-my_data <- left_join(my_data, 
-                     cb_map,
-                     by = intersect(names(my_data),names(cb_map)),
+myData <- left_join(myData, 
+                     cbMap,
+                     by = intersect(names(myData),names(cbMap)),
                      multiple = "all")
 
 # nonlinear demand
 
-my_data <- my_data %>%
+myData <- myData %>%
   group_by(brand,zone,year) %>%
-  mutate(volume0 = mean(base_volume),
-         volume_diff = base_volume - volume0,
-         volume = abs( base_volume + 
-                         volume_diff*d_shift1 -
-                         volume_diff^2*d_shift2 +
-                         volume_diff^3*d_shift3 +
-                         volume_diff^4*d_shift4),
-         discount = (sales_price - list_price)/list_price) %>%
+  mutate(volume0 = mean(baseVolume),
+         volumeDiff = baseVolume - volume0,
+         volume = abs( baseVolume + 
+                         volumeDiff*dShift1 -
+                         volumeDiff^2*dShift2 +
+                         volumeDiff^3*dShift3 +
+                         volumeDiff^4*dShift4),
+         discount = (salesPrice - listPrice)/listPrice) %>%
   ungroup() %>%
-  select(year, month, brand, zone, region, customer_id,
-         list_price, discount, sales_price, volume)
+  select(year, month, brand, zone, region, customerID,
+         listPrice, discount, salesPrice, volume)
 
 # add days, dates
-my_data$day <- ceiling(runif(nrow(my_data),0,31))
-my_data$day[(my_data$month %in% c(4,6,9,11) & my_data$day == 31) |
-              (my_data$month ==2 & my_data$day > 28)] <- 
-  my_data$day[(my_data$month %in% c(4,6,9,11) & my_data$day == 31) |
-                (my_data$month ==2 & my_data$day > 28)] - 12
+myData$day <- ceiling(runif(nrow(myData),0,31))
+myData$day[(myData$month %in% c(4,6,9,11) & myData$day == 31) |
+              (myData$month ==2 & myData$day > 28)] <- 
+  myData$day[(myData$month %in% c(4,6,9,11) & myData$day == 31) |
+                (myData$month ==2 & myData$day > 28)] - 12
 
-my_data$date_string <- paste0(my_data$year,"-",sprintf("%02d", my_data$month),"-", sprintf("%02d", my_data$day))
+myData$date <- paste0(myData$year,"-",sprintf("%02d", myData$month),"-", sprintf("%02d", myData$day))
 
 
-write.csv(my_data,"~/DS Videos/multi video series/true_project_data.csv", row.names = F)
+write.csv(myData,"~/DS Videos/07 multi video series/multi_video_sales_data/true_project_data.csv", row.names = F)
 
 
 ## now lets add some real world charm to the data
 
 # missing volumes
-selection <- round(runif(179,1,nrow(my_data)),0)
-my_data$volume[unique(selection)] <- NA
+selection <- round(runif(179,1,nrow(myData)),0)
+myData$volume[unique(selection)] <- NA
 
 # outliers
-rows <- round(runif(round(.0009*nrow(my_data),0), 1, nrow(my_data)),0)
-my_data$volume[rows] <- my_data$volume[rows] ^ 2
+rows <- round(runif(round(.0009*nrow(myData),0), 1, nrow(myData)),0)
+myData$volume[rows] <- myData$volume[rows] ^ 2
 
 # commas in volume, just to be annoying
-my_data$volume <- formatC(my_data$volume, format = "f", digits = 0, big.mark = ",")
+myData$volume <- formatC(myData$volume, format = "f", digits = 0, big.mark = ",")
 
 
 # multiple cases for brands and zones and regions
-my_data$brand[my_data$year %in% c(2020, 2024)] <- toupper(my_data$brand[my_data$year %in% c(2020, 2024)])
-my_data$region[my_data$year %in% c(2020, 2024)] <- toupper(my_data$region[my_data$year %in% c(2020, 2024)])
-my_data$zone[my_data$year %in% c(2020, 2024)] <- toupper(my_data$zone[my_data$year %in% c(2020, 2024)])
+myData$brand[myData$year %in% c(2020, 2024)] <- toupper(myData$brand[myData$year %in% c(2020, 2024)])
+myData$region[myData$year %in% c(2020, 2024)] <- toupper(myData$region[myData$year %in% c(2020, 2024)])
+myData$zone[myData$year %in% c(2020, 2024)] <- toupper(myData$zone[myData$year %in% c(2020, 2024)])
 
 #Annoying prefixes
-my_data$brand[my_data$year %in% c(2021,2022)] <- paste0("br code: ",my_data$brand[my_data$year %in% c(2021,2022)])
-my_data$region[my_data$year %in% c(2021,2022)] <- paste0("# ",my_data$region[my_data$year %in% c(2021,2022)])
-my_data$customer_id[my_data$zone == "south"] <- paste0("CID_",my_data$customer_id[my_data$zone == "south"])
+myData$brand[myData$year %in% c(2021,2022)] <- paste0("br code: ",myData$brand[myData$year %in% c(2021,2022)])
+myData$region[myData$year %in% c(2021,2022)] <- paste0("# ",myData$region[myData$year %in% c(2021,2022)])
+myData$customerID[myData$zone == "south"] <- paste0("CID_",myData$customerID[myData$zone == "south"])
 
 # misspell some regions
-rows <- round(runif(10, 1, nrow(my_data)),0)
-my_data$region[rows] <- gsub("r","rr",my_data$region[rows])
+rows <- round(runif(10, 1, nrow(myData)),0)
+myData$region[rows] <- gsub("r","rr",myData$region[rows])
 
-rows <- round(runif(6, 1, nrow(my_data)),0)
-my_data$region[rows] <- gsub("region","regoin",my_data$region[rows])
+rows <- round(runif(6, 1, nrow(myData)),0)
+myData$region[rows] <- gsub("region","regoin",myData$region[rows])
 
-rows <- round(runif(1034, 1, nrow(my_data)),0)
-my_data$region[rows] <- gsub("region","region ",my_data$region[rows])
+rows <- round(runif(1034, 1, nrow(myData)),0)
+myData$region[rows] <- gsub("region","region ",myData$region[rows])
 
 # misspell some brands
-rows <- round(runif(103, 1, nrow(my_data)),0)
-my_data$brand[rows] <- gsub("brand","# brnd",my_data$brand[rows])
+rows <- round(runif(103, 1, nrow(myData)),0)
+myData$brand[rows] <- gsub("brand","# brnd",myData$brand[rows])
 
-rows <- round(runif(34, 1, nrow(my_data)),0)
-my_data$brand[rows] <- gsub("brand","branD",my_data$brand[rows])
+rows <- round(runif(34, 1, nrow(myData)),0)
+myData$brand[rows] <- gsub("brand","branD",myData$brand[rows])
 
-rows <- round(runif(3034, 1, nrow(my_data)),0)
-my_data$brand[rows] <- gsub("brand","brand ",my_data$brand[rows])
+rows <- round(runif(3034, 1, nrow(myData)),0)
+myData$brand[rows] <- gsub("brand","brand ",myData$brand[rows])
 
 
 
 # missing prices
-rows <- round(runif(round(.07*nrow(my_data),0), 1, nrow(my_data)),0)
-my_data$list_price[rows] <- NA
-my_data$sales_price[rows] <- NA
-my_data$discount <- NA
+rows <- round(runif(round(.07*nrow(myData),0), 1, nrow(myData)),0)
+myData$listPrice[rows] <- NA
+myData$salesPrice[rows] <- NA
+myData$discount <- NA
 
 # lazy reporting in the east
-my_data$discount[my_data$zone == "east"] <- NA
+myData$discount[myData$zone == "east"] <- NA
 
 # screw up dates
-# my_data$date_string <- as.Date(my_data$date_string)
-my_data$date_string <- ymd(my_data$date_string)
+# myData$date <- as.Date(myData$date)
+myData$date <- ymd(myData$date)
 
-my_data$date_string[my_data$year == 2020] <- gsub("2020","20",my_data$date_string[my_data$year == 2020])
+myData$date[myData$year == 2020] <- gsub("2020","20",myData$date[myData$year == 2020])
 
-my_data$date_string <- as.character(my_data$date_string)
-my_data$date_string[my_data$year == 2022] <- gsub("2022-","",my_data$date_string[my_data$year == 2022])
-my_data$date_string[my_data$year == 2022] <- paste0(my_data$date_string[my_data$year == 2022],"-2022")
+myData$date <- as.character(myData$date)
+myData$date[myData$year == 2022] <- gsub("2022-","",myData$date[myData$year == 2022])
+myData$date[myData$year == 2022] <- paste0(myData$date[myData$year == 2022],"-2022")
 
 # price outlier
-rows <- round(runif(round(.004*nrow(my_data),0), 1, nrow(my_data)),0)
+rows <- round(runif(round(.004*nrow(myData),0), 1, nrow(myData)),0)
 
-my_data$sales_price[rows] <- my_data$sales_price[rows]^1.6
+myData$salesPrice[rows] <- myData$salesPrice[rows]^1.6
 
-write.csv(my_data,"~/DS Videos/multi video series/project_data.csv", row.names = F)
+myData$year <- NULL
+myData$month <- NULL
+myData$day <- NULL
+
+write.csv(myData,"~/DS Videos/07 multi video series/multi_video_sales_data/project_data.csv", row.names = F)
