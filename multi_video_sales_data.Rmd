@@ -1,0 +1,108 @@
+---
+title: "Some Fundamentals"
+author: "Matt Birch"
+date: "2024-05-13"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+```
+
+
+```{r}
+
+# Convert relevant columns to appropriate data types
+myData2 <- myData %>%
+  mutate(
+    date = ymd(date),
+    volume = gsub(",", "", volume),   # Remove commas
+    volume = as.numeric(volume),
+    discount = ifelse(is.na(discount), FALSE, TRUE)  # Fill missing discount as FALSE
+  )
+```
+
+
+# Data structure
+str(myData)
+
+# Summary statistics
+summary(myData)
+
+
+
+# Count missing values per variable
+missing_values <- colSums(is.na(myData))
+missing_values
+
+# Display only columns with missing values
+missing_values[missing_values > 0]
+
+
+
+# Identify potential unique keys
+unique_key_combinations <- myData %>%
+  count(brand, zone, region, customerID) %>%
+  filter(n == 1)
+
+print(unique_key_combinations)
+
+
+
+# Visualize potential outliers
+ggplot(myData, aes(x = listPrice)) +
+  geom_histogram() +
+  ggtitle("Distribution of List Price")
+
+ggplot(myData, aes(x = salesPrice)) +
+  geom_histogram() +
+  ggtitle("Distribution of Sales Price")
+
+ggplot(myData, aes(x = volume)) +
+  geom_histogram() +
+  ggtitle("Distribution of Volume")
+
+
+
+# Check for inconsistent formatting
+unique_brands <- unique(myData$brand)
+unique_zones <- unique(myData$zone)
+unique_regions <- unique(myData$region)
+
+print("Unique brands:")
+print(unique_brands)
+
+print("Unique zones:")
+print(unique_zones)
+
+print("Unique regions:")
+print(unique_regions)
+
+
+
+# Check for duplicates
+duplicate_rows <- myData %>%
+  count(brand, zone, region, customerID, listPrice, discount, salesPrice, volume, date) %>%
+  filter(n > 1)
+
+print(duplicate_rows)
+
+
+
+# Histograms for numerical variables
+myData %>%
+  select(where(is.numeric)) %>%  # Select numeric columns
+  pivot_longer(cols = everything()) %>%
+  ggplot(aes(x = value)) +
+  geom_histogram(bins = 10) +
+  facet_wrap(~name, scales = "free")
+
+# Bar charts for categorical variables
+myData %>%
+  select(where(is.character)) %>%  # Select character columns
+  pivot_longer(cols = everything()) %>%
+  ggplot(aes(x = value)) +
+  geom_bar() +
+  facet_wrap(~name, scales = "free") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))  # Rotate x-axis labels
