@@ -60,6 +60,13 @@ for (b in 1:length(brand)) {
   brandMap <- rbind(brandMap,temp)
 }
 
+brandMap$segment <- NA
+brandMap$segment[brandMap$brand %in% c("brand01","brand02","brand06")] <- "A"
+brandMap$segment[brandMap$brand %in% c("brand08","brand09")] <- "B"
+brandMap$segment[is.na(brandMap$segment) ] <- "C"
+
+unique(brandMap$brand[brandMap$segment == "A"])
+
 # calendar
 year <- 2018:2024
 month <- 1:12
@@ -131,7 +138,7 @@ brandMapPrices <- left_join(brandMapPrices, regionRatios, by = "region")
 
 brandMapPrices <- brandMapPrices %>%
   mutate(price = price0*zoneEffect*regionEffect) %>%
-  select(brand,zone,region,price) %>%
+  select(brand,segment,zone,region,price) %>%
   arrange(brand,zone,region)
 
 # now some time trends
@@ -159,7 +166,7 @@ brandTimeMap <- left_join(brandTimeMap,
 
 brandTimeMapPrices <- full_join(brandMapPrices,
                                    brandTimeMap, 
-                                   by = c("brand","zone","region"), multiple = "all")
+                                   by = c("brand","zone","region","segment"), multiple = "all")
 
 brandTimeMapPrices$trend <- brandTimeMapPrices$trend * runif(nrow(brandTimeMapPrices),min = 0.9,max = 1.1)
 
@@ -168,7 +175,7 @@ brandTimeMapPrices$price <- brandTimeMapPrices$price + brandTimeMapPrices$trend
 brandTimeMapPrices$trend = NULL
 
 brandTimeMapPrices <- brandTimeMapPrices %>%
-  group_by(brand, year, month, zone) %>%
+  group_by(brand, segment, year, month, zone) %>%
   mutate(listPrice = 1.06*max(price)) %>%
   rename(salesPrice = price) %>%
   ungroup()
@@ -207,9 +214,9 @@ myData <- left_join(myData,
                      multiple = "all")
 
 # nonlinear demand
-
+names(myData)
 myData <- myData %>%
-  group_by(brand,zone,year) %>%
+  group_by(brand, segment, zone,year) %>%
   mutate(volume0 = mean(baseVolume),
          volumeDiff = baseVolume - volume0,
          volume = abs( baseVolume + 
@@ -219,7 +226,7 @@ myData <- myData %>%
                          volumeDiff^4*dShift4),
          discount = (salesPrice - listPrice)/listPrice) %>%
   ungroup() %>%
-  select(year, month, brand, zone, region, customerID,
+  select(year, month, brand, segment, zone, region, customerID,
          listPrice, discount, salesPrice, volume)
 
 # add days, dates
@@ -285,7 +292,7 @@ myData$brand[rows] <- gsub("brand","brand ",myData$brand[rows])
 rows <- round(runif(round(.07*nrow(myData),0), 1, nrow(myData)),0)
 myData$listPrice[rows] <- NA
 myData$salesPrice[rows] <- NA
-myData$discount <- NA
+myData$discount[rows] <- NA
 
 # lazy reporting in the east
 myData$discount[myData$zone == "east"] <- NA
