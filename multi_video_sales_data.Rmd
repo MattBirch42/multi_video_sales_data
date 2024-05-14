@@ -35,11 +35,25 @@ myData <- read.csv(url)
 head(myData)
 
 ```
-Right away, I can see that most features seem to be stored correctly. THere are two exceptions:
+Right away, I can see that most features seem to be stored correctly. There are two exceptions:
 
 * Volume: Those numbers are stored as characters and have commas in them. Let's fix that before we move on. 
 
 * Date: currently stored as character. It appears to be in ymd format, but I usually like to check these more before just going for it. 
+
+Let's also check for missing values for each variable:
+
+```{r}
+for(var in names(myData)) {
+  nas <- sum(is.na(myData[,var]))
+  if(nas != 0) {
+    print(paste0("Missing ",var," values: ",nas))
+  }
+  
+}
+```
+
+## Fixing Volume
 
 We'll start with volume. I will substitute commas for nothing, and then I will convert to numeric.
 
@@ -50,25 +64,25 @@ str(myData$volume)
 
 ```
 
+## Fixing Dates
+
 Now that that is fixed, lets get a better look at the date feature. One way to check dates is to graph a variable over time. If there are holes in your date feature, they will often show up in the graph. Let's format date as a ymd date variable and then calculate sum volume over time. 
+
 
 ```{r}
 
 myData$date2 <- as.Date(myData$date)
 
-
-date_check <- myData %>%
+date_counts <- myData%>%
   group_by(date2) %>%
-  summarise(volume = sum(volume))
+  summarise(count = n())
 
-ggplot(date_check, aes(x = date2, y = volume)) +
+ggplot(date_counts, aes(x = date2, y = count)) +
   geom_line() +  
-  labs(x = "Date", y = "Volume", title = "Time Series Plot of Volume") +
-  theme_minimal()  
-
+  labs(x = "Date", y = "Number of Rows", title = "Time Series Plot of Row Counts by Date") + ylim(0,100)
 ```
 
-Woah Nellie! Something is super wrong with our date variable. The first few rows looked good, so it is very possibly an issue with inconsistent formatting. 
+Woah Nellie! Those are years on teh x axis, and something is super wrong with our date variable! The first few rows looked good, but this graph is terrible! It is very possibly an issue with inconsistent formatting. 
 
 Let's start by isolating cases where the raw date does not match this one `myData$date2 <- as.Date(myData$date)`:
 
@@ -92,7 +106,6 @@ rowsToModify <- grep("-2022",myData$date)
 myData$date[rowsToModify] <- gsub("-2022","",myData$date[rowsToModify])
 
 myData$date[rowsToModify] <- paste0("2022-",myData$date[rowsToModify])
-# myData$date <- gsub("-2022","",myData$date)
 
 ```
 
@@ -108,20 +121,12 @@ myData$date <- gsub("0020","2020",myData$date)
 
 myData$date <- ymd(myData$date)
 
-date_check2 <- myData %>%
-  group_by(date) %>%
-  summarise(volume = sum(volume))
-
-ggplot(date_check2, aes(x = date, y = volume)) +
-  geom_line() +  
-  labs(x = "Date", y = "Volume", title = "Time Series Plot of Volume") +
-  theme_minimal()  
 ```
 
-It is hard to know what is going on there with that huge volume spike. It looks like there are dates all through the data now. We haven't cleaned volume yet, so maybe we should just check how many rows of data are on each date:
+It is hard to know what is going on with our dates, but maybe we should just check how many rows of data are on each date. I would like to see some consistency or pattern, without major holes or absurd spikes. (and, going back to the first graph, no dates from the 1st century). And I see consistently filled dates with some sort of seasonal pattern. I am going to leave dates alone for now. 
 
 ```{r}
-date_counts <- date_check2 %>%
+date_counts <- myData%>%
   group_by(date) %>%
   summarise(count = n())
 
@@ -130,7 +135,102 @@ ggplot(date_counts, aes(x = date, y = count)) +
   labs(x = "Date", y = "Number of Rows", title = "Time Series Plot of Row Counts by Date")
 ```
 
-Wow, that is super fake data! Every day has exactly one row! There would be more variation in real life, but the thing we were looking for was some sort of consistency or continuity. No big holes where dates were not being read properly. We achieved that. 
+
+## Other categorical variables
+
+Let's check the other categorical variables, too. This data set is small enough, we can take a simple approach and check unique values. In my experience, you will often find annoying little errors in these.
+
+### Brand
+
+We need some domain knowledge here. For this project, know that there are 9 brands, labeled brand01, brand02, ... brand09. Our data set, however, has `r length(unique(myData$brand))` unique values in the brand column. Let's take a look.
+
+```{r}
+sort(unique(myData$brand))
+
+```
+
+Well that is annoying! Some are misspelled. Some have weird little prefixes. Some are lower case and some are upper case. Some have spaces and some don't. Imagine a bunch of eople in different offices through the company, all writing the same thing in different ways. It happens!
+
+```{r}
+myData$brand <- tolower(myData$brand) #everything to lower case
+
+# remove patterns we do not like and replace them with patters we do like. 
+myData$brand <- gsub("br code: ", "", myData$brand)
+
+myData$brand <- gsub(" ", "", myData$brand)
+
+myData$brand <- gsub("brnd","brand",myData$brand)
+
+myData$brand <- gsub("#","",myData$brand)
+
+sort(unique(myData$brand))
+
+```
+
+### Segment
+
+Market segments look fine. The data is made up, so we don't know what A, B, or C mean, but the are consistently labeled. 
+
+```{r}
+# Check for inconsistent formatting
+unique_segments <- unique(myData$segment)
+
+print(sort(unique_segments))
+```
+
+### zone
+
+```{r}
+unique_zones <- unique(myData$zone)
+
+print(unique_zones)
+
+```
+```{r}
+myData$zone <- tolower(myData$zone)
+
+unique(myData$zone)
+```
+### region
+
+```{r}
+unique_regions <- unique(myData$region)
+
+print(unique_regions)
+```
+Another mess!
+
+```{r}
+myData$region <- gsub(" ","",myData$region)
+myData$region <- gsub("#","",myData$region)
+myData$region <- toupper(myData$region)
+myData$region <- gsub("REGOIN","REGION",myData$region)
+myData$region <- gsub("RREGION","REGION",myData$region)
+myData$region <- tolower(myData$region)
+
+sort(unique(myData$region))
+```
+### customerID
+
+```{r}
+unique_customerID <- unique(myData$customerID)
+
+print(unique_customerID)
+
+```
+I don't want to accidentally treat these like numbers in the future, so I am going to opt to keep "CID_" on them. I want it on all of them. This is not required. As long as R thins it is a character, it is fine. This is just a preference to help with recognizing the data. 
+
+This code tests whether the customerID begins with "CID_", and if it doesn't, it adds it. 
+
+
+```{r}
+myData$customerID2 <- ifelse(grepl("^CID_", myData$customerID), myData$customerID, paste0("CID_", myData$customerID))
+```
+
+Don't forget, though, that we had `r (sum(myData$customerID == "CID_NA"))` missing values, that are stored as "CID_NA" now. 
+
+In practice, you will need context to know what to do with these. It is not numeric, so it cannot be imputed. You could leave the CID_NA tag as a catch-all bin for unlabeled customers. Or you could drop those values from the data set. Or you could try to do something fancy. We'll just leave this as is. CID_NA will be the value we use to describe unidentified customers.  
+
 
 ```{r}
 
@@ -173,19 +273,7 @@ ggplot(myData, aes(x = volume)) +
 ```{r}
 
 
-# Check for inconsistent formatting
-unique_brands <- unique(myData$brand)
-unique_zones <- unique(myData$zone)
-unique_regions <- unique(myData$region)
 
-print("Unique brands:")
-print(unique_brands)
-
-print("Unique zones:")
-print(unique_zones)
-
-print("Unique regions:")
-print(unique_regions)
 
 
 
