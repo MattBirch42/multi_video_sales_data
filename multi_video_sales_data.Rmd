@@ -10,46 +10,150 @@ knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 ```
 
+# Overview
+
+This project uses an artificial data set to give users practice in many areas that are relevant to data science practitioners. This document will have sections for each of the relevant videos, and subsections within those to divide concepts. 
+
+# Exploring a New Data Set
+
+Some of the most important work you will ever do as a data person is in this section. You have to have good data to get good results. In this section, I will highlight some common processes related to Exploratory Data Analysis (EDA) and data cleaning. 
+
+## Video Link: 
+
+## First glimpses of data
+
+The first thing I am going to do when I get a new data set is look at data structures. I am a big fan of the `head()` function which tells you variable classes and presents the first few values. 
 
 ```{r}
 
-# Convert relevant columns to appropriate data types
-myData2 <- myData %>%
-  mutate(
-    date = ymd(date),
-    volume = gsub(",", "", volume),   # Remove commas
-    volume = as.numeric(volume),
-    discount = ifelse(is.na(discount), FALSE, TRUE)  # Fill missing discount as FALSE
-  )
+# read in data
+
+url <- "https://raw.githubusercontent.com/MattBirch42/multi_video_sales_data/main/project_data.csv"
+
+myData <- read.csv(url)
+
+head(myData)
+
+```
+Right away, I can see that most features seem to be stored correctly. THere are two exceptions:
+
+* Volume: Those numbers are stored as characters and have commas in them. Let's fix that before we move on. 
+
+* Date: currently stored as character. It appears to be in ymd format, but I usually like to check these more before just going for it. 
+
+We'll start with volume. I will substitute commas for nothing, and then I will convert to numeric.
+
+```{r}
+myData$volume <- as.numeric(gsub(",","",myData$volume))
+
+str(myData$volume)
+
 ```
 
+Now that that is fixed, lets get a better look at the date feature. One way to check dates is to graph a variable over time. If there are holes in your date feature, they will often show up in the graph. Let's format date as a ymd date variable and then calculate sum volume over time. 
 
-# Data structure
-str(myData)
+```{r}
+
+myData$date2 <- as.Date(myData$date)
+
+
+date_check <- myData %>%
+  group_by(date2) %>%
+  summarise(volume = sum(volume))
+
+ggplot(date_check, aes(x = date2, y = volume)) +
+  geom_line() +  
+  labs(x = "Date", y = "Volume", title = "Time Series Plot of Volume") +
+  theme_minimal()  
+
+```
+
+Woah Nellie! Something is super wrong with our date variable. The first few rows looked good, so it is very possibly an issue with inconsistent formatting. 
+
+Let's start by isolating cases where the raw date does not match this one `myData$date2 <- as.Date(myData$date)`:
+
+```{r}
+dateTemp <- myData %>%
+  select(date,date2) %>%
+  mutate(date = as.character(date),
+         date2 = as.character(date2)) %>%
+  distinct()
+
+dateTemp <- subset(dateTemp, date != date2, na.rm = T)
+
+dateTemp
+```
+
+This shows us where some encodings are wrong. In this case, the 2022 data was in mdy form instead of ymd. So converting the whole string to ymd was wrong. There are multiple ways to clean this. The structure inconsistency is simple enough here that I think this way will be easiest:
+
+```{r}
+rowsToModify <- grep("-2022",myData$date)
+
+myData$date[rowsToModify] <- gsub("-2022","",myData$date[rowsToModify])
+
+myData$date[rowsToModify] <- paste0("2022-",myData$date[rowsToModify])
+# myData$date <- gsub("-2022","",myData$date)
+
+```
+
+Let's also just check the unique year values of the date variable after this change.
+
+```{r}
+sort(unique(year(myData$date)))
+```
+That is weird. If you dig in a little further, you will see that all of the 2020 dates were messed up and recorded as the year 0020. It might not always be so easy to fix messy dates. They can get messed up in so many ways. 
+
+```{r}
+myData$date <- gsub("0020","2020",myData$date)
+
+myData$date <- ymd(myData$date)
+
+date_check2 <- myData %>%
+  group_by(date) %>%
+  summarise(volume = sum(volume))
+
+ggplot(date_check2, aes(x = date, y = volume)) +
+  geom_line() +  
+  labs(x = "Date", y = "Volume", title = "Time Series Plot of Volume") +
+  theme_minimal()  
+```
+
+It is hard to know what is going on there with that huge volume spike. It looks like there are dates all through the data now. We haven't cleaned volume yet, so maybe we should just check how many rows of data are on each date:
+
+```{r}
+date_counts <- date_check2 %>%
+  group_by(date) %>%
+  summarise(count = n())
+
+ggplot(date_counts, aes(x = date, y = count)) +
+  geom_line() +  
+  labs(x = "Date", y = "Number of Rows", title = "Time Series Plot of Row Counts by Date")
+```
+
+Wow, that is super fake data! Every day has exactly one row! There would be more variation in real life, but the thing we were looking for was some sort of consistency or continuity. No big holes where dates were not being read properly. We achieved that. 
+
+```{r}
 
 # Summary statistics
 summary(myData)
 
+```
 
+
+```{r}
 
 # Count missing values per variable
 missing_values <- colSums(is.na(myData))
 missing_values
 
+print(paste0("There are ",nrow(myData), " rows in the data. This is how many NA values exist by variable:"))
 # Display only columns with missing values
 missing_values[missing_values > 0]
 
+```
 
 
-# Identify potential unique keys
-unique_key_combinations <- myData %>%
-  count(brand, zone, region, customerID) %>%
-  filter(n == 1)
-
-print(unique_key_combinations)
-
-
-
+```{r}
 # Visualize potential outliers
 ggplot(myData, aes(x = listPrice)) +
   geom_histogram() +
@@ -62,7 +166,11 @@ ggplot(myData, aes(x = salesPrice)) +
 ggplot(myData, aes(x = volume)) +
   geom_histogram() +
   ggtitle("Distribution of Volume")
+```
 
+
+
+```{r}
 
 
 # Check for inconsistent formatting
